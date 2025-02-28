@@ -19,25 +19,28 @@ export async function crawlAndCheckUrls(baseUrl: string): Promise<CrawlResult> {
     // First, try to find and parse sitemap
     const sitemapUrls = await findAndParseSitemaps(baseUrl);
     
-    console.log(`[urlCrawler] Found ${sitemapUrls.length} URLs from sitemap`);
+    console.log(`[urlCrawler] Found ${sitemapUrls.length} unique URLs from sitemap`);
 
     // If sitemap found, use those URLs
     const urlsToCrawl = sitemapUrls.length > 0 
       ? sitemapUrls 
       : await extractUrlsFromPage(baseUrl);
 
-    console.log(`[urlCrawler] Total URLs to check: ${urlsToCrawl.length}`);
+    // Remove any remaining duplicates
+    const uniqueUrlsToCrawl = [...new Set(urlsToCrawl)];
+
+    console.log(`[urlCrawler] Total unique URLs to check: ${uniqueUrlsToCrawl.length}`);
     
     // Log each URL being crawled
     console.log('[urlCrawler] URLs to be checked:');
-    urlsToCrawl.forEach((url, index) => {
+    uniqueUrlsToCrawl.forEach((url, index) => {
       console.log(`  ${index + 1}. ${url}`);
     });
 
     // Process URLs sequentially
     const brokenPages: BrokenPage[] = [];
     
-    for (const url of urlsToCrawl) {
+    for (const url of uniqueUrlsToCrawl) {
       console.log(`[urlCrawler] Checking URL: ${url}`);
       try {
         const controller = new AbortController();
@@ -145,7 +148,8 @@ async function findAndParseSitemaps(baseUrl: string): Promise<string[]> {
     console.warn('[urlCrawler] Sitemap parsing error:', error);
   }
 
-  return sitemapUrls;
+  // Remove duplicates and return unique URLs
+  return [...new Set(sitemapUrls)];
 }
 
 async function parseXmlSitemap(xmlText: string): Promise<string[]> {
