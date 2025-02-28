@@ -12,14 +12,22 @@ interface CrawlResult {
   error?: string;
 }
 
-// Function to normalize URLs for comparison
+// Function to normalize URLs for comparison (improved version)
 function normalizeUrl(url: string): string {
   try {
     // Create URL object to parse the URL
     const parsedUrl = new URL(url);
     
-    // Normalize: remove trailing slashes, convert to lowercase
-    let normalized = parsedUrl.origin + parsedUrl.pathname.replace(/\/+$/, '').toLowerCase();
+    // Normalize: remove trailing slashes, convert to lowercase, remove www. prefix
+    let hostname = parsedUrl.hostname.toLowerCase();
+    if (hostname.startsWith('www.')) {
+      hostname = hostname.substring(4);
+    }
+    
+    let pathname = parsedUrl.pathname.replace(/\/+$/, '').toLowerCase();
+    
+    // Build normalized URL with consistent protocol
+    let normalized = parsedUrl.protocol + '//' + hostname + pathname;
     
     // Keep the query parameters but ensure they're sorted
     if (parsedUrl.search) {
@@ -28,6 +36,7 @@ function normalizeUrl(url: string): string {
       normalized += '?' + sortedParams.toString();
     }
     
+    // Remove any fragments (#)
     return normalized;
   } catch {
     // If URL parsing fails, return the original
@@ -48,6 +57,33 @@ export async function crawlAndCheckUrls(baseUrl: string): Promise<CrawlResult> {
     const urlsToCrawl = sitemapUrls.length > 0 
       ? sitemapUrls 
       : await extractUrlsFromPage(baseUrl);
+
+    // Debug the URLs and their normalized versions
+    console.log('[urlCrawler] Debug: URL normalization map:');
+    const normalizationMap = new Map<string, string>();
+    urlsToCrawl.forEach(url => {
+      const normalized = normalizeUrl(url);
+      normalizationMap.set(url, normalized);
+    });
+    
+    // Count how many URLs normalize to the same value
+    const normalizationCounts = new Map<string, number>();
+    for (const normalized of normalizationMap.values()) {
+      normalizationCounts.set(normalized, (normalizationCounts.get(normalized) || 0) + 1);
+    }
+    
+    // Log duplicates for debugging
+    console.log('[urlCrawler] Debug: Duplicates found:');
+    for (const [normalized, count] of normalizationCounts.entries()) {
+      if (count > 1) {
+        console.log(`  Normalized URL "${normalized}" appears ${count} times:`);
+        for (const [original, norm] of normalizationMap.entries()) {
+          if (norm === normalized) {
+            console.log(`    - ${original}`);
+          }
+        }
+      }
+    }
 
     // Use a Map to track normalized URLs and their original form
     const urlMap = new Map<string, string>();
