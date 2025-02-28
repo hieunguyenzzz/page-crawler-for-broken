@@ -1,4 +1,58 @@
-# Welcome to Remix!
+# Service Monitoring Tool
+
+A web application built with Remix that allows you to scan websites for broken links and pages.
+
+## Features
+
+- Crawls a given URL to find all internal links
+- Checks each link for 404, 500, or other errors
+- Returns detailed reports on any broken pages found
+- Provides both a web interface and API for scanning
+
+## API Usage
+
+The application exposes a REST API that can be used to scan websites programmatically.
+
+### Scan for Broken Pages
+
+**Endpoint:** `POST /api/broken-page-scanner`
+
+**Request:**
+```bash
+curl -X POST -H "Content-Type: application/json" -d '{"url": "https://example.com"}' http://localhost:3000/api/broken-page-scanner
+```
+
+**Successful Response (No broken pages):**
+```json
+{
+  "error": false,
+  "message": "No broken pages found"
+}
+```
+
+**Successful Response (With broken pages):**
+```json
+{
+  "error": true,
+  "message": "There are 2 broken pages",
+  "pages": [
+    { "url": "https://example.com/broken-page" },
+    { "url": "https://example.com/another-broken-page" }
+  ]
+}
+```
+
+**Error Response:**
+```json
+{
+  "error": true,
+  "message": "Failed to fetch URL"
+}
+```
+
+---
+
+# Remix App Information
 
 - 📖 [Remix docs](https://remix.run/docs)
 
