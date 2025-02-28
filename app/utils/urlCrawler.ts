@@ -12,6 +12,29 @@ interface CrawlResult {
   error?: string;
 }
 
+// Function to normalize URLs for comparison
+function normalizeUrl(url: string): string {
+  try {
+    // Create URL object to parse the URL
+    const parsedUrl = new URL(url);
+    
+    // Normalize: remove trailing slashes, convert to lowercase
+    let normalized = parsedUrl.origin + parsedUrl.pathname.replace(/\/+$/, '').toLowerCase();
+    
+    // Keep the query parameters but ensure they're sorted
+    if (parsedUrl.search) {
+      const searchParams = new URLSearchParams(parsedUrl.search);
+      const sortedParams = new URLSearchParams([...searchParams.entries()].sort());
+      normalized += '?' + sortedParams.toString();
+    }
+    
+    return normalized;
+  } catch {
+    // If URL parsing fails, return the original
+    return url;
+  }
+}
+
 export async function crawlAndCheckUrls(baseUrl: string): Promise<CrawlResult> {
   try {
     console.log(`[urlCrawler] Starting crawl for base URL: ${baseUrl}`);
@@ -19,17 +42,28 @@ export async function crawlAndCheckUrls(baseUrl: string): Promise<CrawlResult> {
     // First, try to find and parse sitemap
     const sitemapUrls = await findAndParseSitemaps(baseUrl);
     
-    console.log(`[urlCrawler] Found ${sitemapUrls.length} unique URLs from sitemap`);
+    console.log(`[urlCrawler] Found ${sitemapUrls.length} URLs from sitemap before deduplication`);
 
     // If sitemap found, use those URLs
     const urlsToCrawl = sitemapUrls.length > 0 
       ? sitemapUrls 
       : await extractUrlsFromPage(baseUrl);
 
-    // Remove any remaining duplicates
-    const uniqueUrlsToCrawl = [...new Set(urlsToCrawl)];
+    // Use a Map to track normalized URLs and their original form
+    const urlMap = new Map<string, string>();
+    
+    for (const url of urlsToCrawl) {
+      const normalizedUrl = normalizeUrl(url);
+      if (!urlMap.has(normalizedUrl)) {
+        urlMap.set(normalizedUrl, url);
+      }
+    }
+    
+    // Get unique URLs from the map values
+    const uniqueUrlsToCrawl = Array.from(urlMap.values());
 
-    console.log(`[urlCrawler] Total unique URLs to check: ${uniqueUrlsToCrawl.length}`);
+    console.log(`[urlCrawler] Total URLs found: ${urlsToCrawl.length}`);
+    console.log(`[urlCrawler] Total unique URLs to check after deduplication: ${uniqueUrlsToCrawl.length}`);
     
     // Log each URL being crawled
     console.log('[urlCrawler] URLs to be checked:');
@@ -37,11 +71,24 @@ export async function crawlAndCheckUrls(baseUrl: string): Promise<CrawlResult> {
       console.log(`  ${index + 1}. ${url}`);
     });
 
+    // Track processed URLs during this run to avoid any potential duplicates
+    const processedUrls = new Set<string>();
+    
     // Process URLs sequentially
     const brokenPages: BrokenPage[] = [];
     
     for (const url of uniqueUrlsToCrawl) {
+      const normalizedUrl = normalizeUrl(url);
+      
+      // Skip if already processed in this run
+      if (processedUrls.has(normalizedUrl)) {
+        console.log(`[urlCrawler] Skipping already processed URL: ${url}`);
+        continue;
+      }
+      
+      processedUrls.add(normalizedUrl);
       console.log(`[urlCrawler] Checking URL: ${url}`);
+
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -144,12 +191,23 @@ async function findAndParseSitemaps(baseUrl: string): Promise<string[]> {
         continue;
       }
     }
+
+    // Use a map to deduplicate
+    const urlMap = new Map<string, string>();
+    
+    for (const url of sitemapUrls) {
+      const normalizedUrl = normalizeUrl(url);
+      if (!urlMap.has(normalizedUrl)) {
+        urlMap.set(normalizedUrl, url);
+      }
+    }
+    
+    return Array.from(urlMap.values());
   } catch (error) {
     console.warn('[urlCrawler] Sitemap parsing error:', error);
   }
 
-  // Remove duplicates and return unique URLs
-  return [...new Set(sitemapUrls)];
+  return sitemapUrls;
 }
 
 async function parseXmlSitemap(xmlText: string): Promise<string[]> {
