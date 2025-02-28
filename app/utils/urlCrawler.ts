@@ -34,74 +34,72 @@ export async function crawlAndCheckUrls(baseUrl: string): Promise<CrawlResult> {
       console.log(`  ${index + 1}. ${url}`);
     });
 
-    // Check each URL's status
-    const brokenPages = await Promise.all(
-      urlsToCrawl.map(async (url) => {
-        console.log(`[urlCrawler] Checking URL: ${url}`);
+    // Process URLs sequentially
+    const brokenPages: BrokenPage[] = [];
+    
+    for (const url of urlsToCrawl) {
+      console.log(`[urlCrawler] Checking URL: ${url}`);
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
         try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 10000);
+          const response = await fetch(url, { 
+            method: 'GET',
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+              'Accept-Language': 'en-US,en;q=0.5',
+              'Accept-Encoding': 'gzip, deflate, br',
+              'Connection': 'keep-alive',
+              'Upgrade-Insecure-Requests': '1'
+            }
+          });
+          
+          clearTimeout(timeoutId);
 
-          try {
-            const response = await fetch(url, { 
-              method: 'GET',  // Changed from HEAD to GET
-              signal: controller.signal,
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1'
-              }
+          // Consider 4xx and 5xx status codes as broken
+          if (response.status >= 400) {
+            console.log(`[urlCrawler] Broken URL: ${url} (Status: ${response.status})`);
+            brokenPages.push({
+              url,
+              status: response.status
             });
-            
-            clearTimeout(timeoutId);
-
-            // Consider 4xx and 5xx status codes as broken
-            if (response.status >= 400) {
-              console.log(`[urlCrawler] Broken URL: ${url} (Status: ${response.status})`);
-              return {
-                url,
-                status: response.status
-              };
-            }
-            
-            return null;
-          } catch (fetchError) {
-            clearTimeout(timeoutId);
-            console.log(`[urlCrawler] Fetch error for URL: ${url}`, fetchError);
-            
-            // More detailed error handling
-            if (fetchError.name === 'AbortError') {
-              return {
-                url,
-                error: 'Request timed out'
-              };
-            }
-            
-            return {
+          }
+        } catch (fetchError) {
+          clearTimeout(timeoutId);
+          console.log(`[urlCrawler] Fetch error for URL: ${url}`, fetchError);
+          
+          // More detailed error handling
+          if (fetchError.name === 'AbortError') {
+            brokenPages.push({
+              url,
+              error: 'Request timed out'
+            });
+          } else {
+            brokenPages.push({
               url,
               error: fetchError instanceof Error ? fetchError.message : 'Unknown fetch error'
-            };
+            });
           }
-        } catch (error) {
-          console.log(`[urlCrawler] General error checking URL: ${url}`, error);
-          return {
-            url,
-            error: error instanceof Error ? error.message : 'Unknown error'
-          };
         }
-      })
-    );
+      } catch (error) {
+        console.log(`[urlCrawler] General error checking URL: ${url}`, error);
+        brokenPages.push({
+          url,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
 
-    // Filter out non-broken pages
-    const filteredBrokenPages = brokenPages.filter(page => page !== null) as BrokenPage[];
+      // Optional: Add a small delay between requests to reduce server load
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
     
-    console.log(`[urlCrawler] Crawl completed. Found ${filteredBrokenPages.length} broken URLs`);
+    console.log(`[urlCrawler] Crawl completed. Found ${brokenPages.length} broken URLs`);
 
     return {
-      brokenPages: filteredBrokenPages
+      brokenPages
     };
   } catch (error) {
     console.error('[urlCrawler] Crawling error:', error);
