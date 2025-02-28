@@ -14,7 +14,7 @@ interface CrawlResult {
 export async function crawlAndCheckUrls(baseUrl: string): Promise<CrawlResult> {
   try {
     // Validate base URL
-    const parsedUrl = new URL(baseUrl);
+    const parsedBaseUrl = new URL(baseUrl);
     console.log(`[urlCrawler] Starting to crawl: ${baseUrl}`);
 
     // Fetch the initial page
@@ -26,7 +26,8 @@ export async function crawlAndCheckUrls(baseUrl: string): Promise<CrawlResult> {
     const dom = new JSDOM(html, {
       // Disable CSS parsing to avoid errors
       runScripts: "outside-only",
-      resources: "usable"
+      resources: "usable",
+      url: baseUrl  // Important: set base URL for resolving relative links
     });
     const document = dom.window.document;
 
@@ -83,29 +84,25 @@ export async function crawlAndCheckUrls(baseUrl: string): Promise<CrawlResult> {
 function extractUniqueUrls(document: Document, baseUrl: string): string[] {
   const uniqueUrls = new Set<string>();
   
-  // Extract URLs from different elements
-  const linkSelectors = [
-    'a[href]',
-    'img[src]',
-    'script[src]',
-    'link[href]'
-  ];
-
-  linkSelectors.forEach(selector => {
-    document.querySelectorAll(selector).forEach(el => {
-      const href = el.getAttribute('href') || el.getAttribute('src');
-      if (href) {
-        try {
-          const fullUrl = new URL(href, baseUrl).toString();
-          // Only include URLs from the same domain
-          if (new URL(fullUrl).hostname === new URL(baseUrl).hostname) {
-            uniqueUrls.add(fullUrl);
-          }
-        } catch {
-          // Ignore invalid URLs
+  // Select all anchor tags
+  const links = document.querySelectorAll('a[href]');
+  
+  links.forEach((link) => {
+    const href = link.getAttribute('href');
+    
+    if (href) {
+      try {
+        // Use URL constructor to resolve relative and absolute paths
+        const fullUrl = new URL(href, baseUrl).toString();
+        
+        // Only include URLs from the same domain
+        if (new URL(fullUrl).hostname === new URL(baseUrl).hostname) {
+          uniqueUrls.add(fullUrl);
         }
+      } catch {
+        // Ignore invalid URLs
       }
-    });
+    }
   });
 
   return Array.from(uniqueUrls);
