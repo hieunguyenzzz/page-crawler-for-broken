@@ -39,23 +39,54 @@ export async function crawlAndCheckUrls(baseUrl: string): Promise<CrawlResult> {
       urlsToCrawl.map(async (url) => {
         console.log(`[urlCrawler] Checking URL: ${url}`);
         try {
-          const response = await fetch(url, { 
-            method: 'HEAD',
-            timeout: 10000  // 10-second timeout
-          });
-          
-          // Consider 4xx and 5xx status codes as broken
-          if (response.status >= 400) {
-            console.log(`[urlCrawler] Broken URL: ${url} (Status: ${response.status})`);
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+          try {
+            const response = await fetch(url, { 
+              method: 'GET',  // Changed from HEAD to GET
+              signal: controller.signal,
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+              }
+            });
+            
+            clearTimeout(timeoutId);
+
+            // Consider 4xx and 5xx status codes as broken
+            if (response.status >= 400) {
+              console.log(`[urlCrawler] Broken URL: ${url} (Status: ${response.status})`);
+              return {
+                url,
+                status: response.status
+              };
+            }
+            
+            return null;
+          } catch (fetchError) {
+            clearTimeout(timeoutId);
+            console.log(`[urlCrawler] Fetch error for URL: ${url}`, fetchError);
+            
+            // More detailed error handling
+            if (fetchError.name === 'AbortError') {
+              return {
+                url,
+                error: 'Request timed out'
+              };
+            }
+            
             return {
               url,
-              status: response.status
+              error: fetchError instanceof Error ? fetchError.message : 'Unknown fetch error'
             };
           }
-          
-          return null;
         } catch (error) {
-          console.log(`[urlCrawler] Error checking URL: ${url}`, error);
+          console.log(`[urlCrawler] General error checking URL: ${url}`, error);
           return {
             url,
             error: error instanceof Error ? error.message : 'Unknown error'
