@@ -124,7 +124,8 @@ export async function crawlAndCheckUrls(baseUrl: string): Promise<CrawlResult> {
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        // Increase timeout to 30 seconds for slow sites
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
 
         try {
           const response = await fetch(url, { 
@@ -152,15 +153,16 @@ export async function crawlAndCheckUrls(baseUrl: string): Promise<CrawlResult> {
           }
         } catch (fetchError) {
           clearTimeout(timeoutId);
-          console.log(`[urlCrawler] Fetch error for URL: ${url}`, fetchError);
           
-          // More detailed error handling
+          // Improved error logging for timeout errors
           if (fetchError.name === 'AbortError') {
+            console.log(`[urlCrawler] Request timed out for URL: ${url} (30s timeout)`);
             brokenPages.push({
               url,
-              error: 'Request timed out'
+              error: 'Request timed out after 30 seconds'
             });
           } else {
+            console.log(`[urlCrawler] Fetch error for URL: ${url}`, fetchError);
             brokenPages.push({
               url,
               error: fetchError instanceof Error ? fetchError.message : 'Unknown fetch error'
@@ -175,8 +177,8 @@ export async function crawlAndCheckUrls(baseUrl: string): Promise<CrawlResult> {
         });
       }
 
-      // Optional: Add a small delay between requests to reduce server load
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Increase delay between requests to reduce server load
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
     console.log(`[urlCrawler] Crawl completed. Found ${brokenPages.length} broken URLs`);
@@ -194,21 +196,34 @@ async function findAndParseSitemaps(baseUrl: string): Promise<string[]> {
   const sitemapUrls: string[] = [];
   
   try {
-    // Extract locale from baseUrl
+    // Check if the baseUrl itself is a sitemap URL
+    const isSitemapUrl = baseUrl.toLowerCase().endsWith('sitemap.xml') || 
+                         baseUrl.toLowerCase().endsWith('sitemap_index.xml');
+    
+    // Extract the actual base site URL (without sitemap.xml)
     const baseUrlObj = new URL(baseUrl);
-    const basePathParts = baseUrlObj.pathname.split('/').filter(Boolean);
+    const actualBaseUrl = isSitemapUrl 
+      ? baseUrlObj.origin + baseUrlObj.pathname.substring(0, baseUrlObj.pathname.lastIndexOf('/') + 1)
+      : baseUrl;
+    
+    // Extract locale from the actual base URL
+    const basePathParts = new URL(actualBaseUrl).pathname.split('/').filter(Boolean);
     const locale = basePathParts.length > 0 ? basePathParts[0] : null;
     
     if (locale) {
       console.log(`[urlCrawler] Detected locale in base URL: ${locale}`);
     }
     
-    // Try standard sitemap locations
-    const sitemapLocations = [
-      `${baseUrl}/sitemap.xml`,
-      `${baseUrl}/sitemap_index.xml`,
-      `${new URL(baseUrl).origin}/sitemap.xml`
-    ];
+    console.log(`[urlCrawler] Actual base URL: ${actualBaseUrl}`);
+    
+    // If the user provided URL is already a sitemap, try it directly first
+    const sitemapLocations = isSitemapUrl 
+      ? [baseUrl] 
+      : [
+          `${actualBaseUrl}sitemap.xml`,
+          `${actualBaseUrl}sitemap_index.xml`,
+          `${new URL(actualBaseUrl).origin}/sitemap.xml`
+        ];
 
     console.log('[urlCrawler] Attempting to find sitemaps at:');
     sitemapLocations.forEach(loc => console.log(`  - ${loc}`));
