@@ -8,6 +8,17 @@ A web application built with Remix that allows you to scan websites for broken l
 - Checks each link for 404, 500, or other errors
 - Returns detailed reports on any broken pages found
 - Provides both a web interface and API for scanning
+- Stores URL information and scan results in SQLite database
+
+## Database
+
+The application uses SQLite for data storage. The database file is automatically created in the `data` directory at the root of the project. This directory is created if it doesn't exist.
+
+### Database Configuration
+
+- By default, the database is stored in `data/service-monitoring.db`
+- You can change the database location by setting the `DATA_DIR` environment variable
+- The database file is gitignored and will be automatically initialized on first run
 
 ## API Usage
 

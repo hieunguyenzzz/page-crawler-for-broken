@@ -1,5 +1,19 @@
+# Database files
+/data/*.db
+/data/service-monitoring.db
+
+# Node modules
 node_modules
 
-/.cache
+# Build files
 /build
+/.cache
+
+# Environment variables
 .env
+
+# Editor files
+.DS_Store
+.vscode
+*.swp
+*~
