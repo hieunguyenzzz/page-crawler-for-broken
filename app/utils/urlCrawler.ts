@@ -18,15 +18,13 @@ function normalizeUrl(url: string): string {
     // Create URL object to parse the URL
     const parsedUrl = new URL(url);
     
-    // Normalize: remove trailing slashes, convert to lowercase, remove www. prefix
-    let hostname = parsedUrl.hostname.toLowerCase();
-    if (hostname.startsWith('www.')) {
-      hostname = hostname.substring(4);
-    }
+    // Preserve the original path including locale (don't modify path structure)
+    const pathname = parsedUrl.pathname;
     
-    let pathname = parsedUrl.pathname.replace(/\/+$/, '').toLowerCase();
+    // Normalize: lowercase hostname only
+    const hostname = parsedUrl.hostname.toLowerCase();
     
-    // Build normalized URL with consistent protocol
+    // Build normalized URL with original path preserved
     let normalized = parsedUrl.protocol + '//' + hostname + pathname;
     
     // Keep the query parameters but ensure they're sorted
@@ -36,7 +34,6 @@ function normalizeUrl(url: string): string {
       normalized += '?' + sortedParams.toString();
     }
     
-    // Remove any fragments (#)
     return normalized;
   } catch {
     // If URL parsing fails, return the original
@@ -197,6 +194,15 @@ async function findAndParseSitemaps(baseUrl: string): Promise<string[]> {
   const sitemapUrls: string[] = [];
   
   try {
+    // Extract locale from baseUrl
+    const baseUrlObj = new URL(baseUrl);
+    const basePathParts = baseUrlObj.pathname.split('/').filter(Boolean);
+    const locale = basePathParts.length > 0 ? basePathParts[0] : null;
+    
+    if (locale) {
+      console.log(`[urlCrawler] Detected locale in base URL: ${locale}`);
+    }
+    
     // Try standard sitemap locations
     const sitemapLocations = [
       `${baseUrl}/sitemap.xml`,
@@ -221,14 +227,32 @@ async function findAndParseSitemaps(baseUrl: string): Promise<string[]> {
         const parsedSitemap = await parseXmlSitemap(xmlText);
         
         console.log(`[urlCrawler] Found ${parsedSitemap.length} URLs in sitemap: ${sitemapUrl}`);
-        sitemapUrls.push(...parsedSitemap);
+        
+        // If we found a locale in the base URL, filter URLs to only include that locale
+        if (locale) {
+          console.log(`[urlCrawler] Filtering sitemap URLs to match locale: ${locale}`);
+          const filteredUrls = parsedSitemap.filter(url => {
+            try {
+              const urlObj = new URL(url);
+              const urlPathParts = urlObj.pathname.split('/').filter(Boolean);
+              return urlPathParts.length > 0 && urlPathParts[0] === locale;
+            } catch {
+              return false;
+            }
+          });
+          
+          console.log(`[urlCrawler] After filtering by locale: ${filteredUrls.length} URLs remain`);
+          sitemapUrls.push(...filteredUrls);
+        } else {
+          sitemapUrls.push(...parsedSitemap);
+        }
       } catch (error) {
         console.warn(`[urlCrawler] Error processing sitemap ${sitemapUrl}:`, error);
         continue;
       }
     }
 
-    // Use a map to deduplicate
+    // Use a map to deduplicate while preserving original form
     const urlMap = new Map<string, string>();
     
     for (const url of sitemapUrls) {
@@ -238,7 +262,10 @@ async function findAndParseSitemaps(baseUrl: string): Promise<string[]> {
       }
     }
     
-    return Array.from(urlMap.values());
+    const uniqueUrls = Array.from(urlMap.values());
+    console.log(`[urlCrawler] After deduplication: ${uniqueUrls.length} unique URLs`);
+    
+    return uniqueUrls;
   } catch (error) {
     console.warn('[urlCrawler] Sitemap parsing error:', error);
   }
@@ -253,11 +280,25 @@ async function parseXmlSitemap(xmlText: string): Promise<string[]> {
     // Handle sitemap index
     if (parsed.sitemapindex && parsed.sitemapindex.sitemap) {
       const sitemapLocations = parsed.sitemapindex.sitemap.map((sm: any) => sm.loc[0]);
+      console.log('[urlCrawler] Found sitemap index with locations:', sitemapLocations);
+      
       const nestedUrls = await Promise.all(
         sitemapLocations.map(async (url: string) => {
-          const nestedResponse = await fetch(url);
-          const nestedXml = await nestedResponse.text();
-          return parseXmlSitemap(nestedXml);
+          try {
+            console.log(`[urlCrawler] Fetching nested sitemap: ${url}`);
+            const nestedResponse = await fetch(url);
+            
+            if (!nestedResponse.ok) {
+              console.log(`[urlCrawler] Failed to fetch nested sitemap: ${url} (${nestedResponse.status})`);
+              return [];
+            }
+            
+            const nestedXml = await nestedResponse.text();
+            return parseXmlSitemap(nestedXml);
+          } catch (error) {
+            console.error(`[urlCrawler] Error fetching nested sitemap ${url}:`, error);
+            return [];
+          }
         })
       );
       return nestedUrls.flat();
@@ -265,13 +306,20 @@ async function parseXmlSitemap(xmlText: string): Promise<string[]> {
     
     // Handle regular sitemap
     if (parsed.urlset && parsed.urlset.url) {
-      return parsed.urlset.url
+      const urls = parsed.urlset.url
         .map((urlEntry: any) => {
           // Extract <loc> tag, which contains the URL
           const loc = urlEntry.loc && urlEntry.loc[0];
           return loc;
         })
         .filter(Boolean);  // Remove any null/undefined entries
+      
+      // Log the first few URLs to verify locale
+      const sampleUrls = urls.slice(0, 5);
+      console.log(`[urlCrawler] Sample URLs from sitemap (${urls.length} total):`);
+      sampleUrls.forEach(url => console.log(`  - ${url}`));
+      
+      return urls;
     }
     
     return [];
