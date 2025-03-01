@@ -15,6 +15,9 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ message: 'No URLs registered' });
     }
     
+    // Limit concurrent scans to prevent overwhelming the system
+    const MAX_CONCURRENT_SCANS = 5;
+    
     const scanPromises = urls.map(async (registeredUrl) => {
       console.log(`[api.scan-all] Scanning ${registeredUrl.url}`);
       
@@ -49,7 +52,18 @@ export async function action({ request }: ActionFunctionArgs) {
       }
     });
     
-    const results = await Promise.all(scanPromises);
+    // Use Promise.all with concurrency limit
+    const results = await Promise.all(
+      scanPromises.slice(0, MAX_CONCURRENT_SCANS)
+    );
+    
+    // If there are more URLs, process them in batches
+    if (scanPromises.length > MAX_CONCURRENT_SCANS) {
+      const remainingResults = await Promise.all(
+        scanPromises.slice(MAX_CONCURRENT_SCANS)
+      );
+      results.push(...remainingResults);
+    }
     
     return json({
       message: `Scanned ${results.length} URLs`,
