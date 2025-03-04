@@ -141,6 +141,7 @@ export default function UrlManagementPage() {
                   <th className="px-4 py-2 border-b">Scan Time</th>
                   <th className="px-4 py-2 border-b">Status</th>
                   <th className="px-4 py-2 border-b">Broken Pages</th>
+                  <th className="px-4 py-2 border-b">Total Pages</th>
                 </tr>
               </thead>
               <tbody>
@@ -179,6 +180,9 @@ export default function UrlManagementPage() {
                             </ul>
                           </details>
                         )}
+                      </td>
+                      <td className="px-4 py-2 border-b">
+                        {result.totalPages || 0}
                       </td>
                     </tr>
                   );

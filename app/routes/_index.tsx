@@ -63,6 +63,16 @@ export default function Index() {
     setTimeout(() => setShowMessage(false), 5000);
   }
 
+  // Type guard to check action data type
+  const isSuccessActionData = (data: any): data is { success: boolean; message: string; url?: any } => {
+    return data && typeof data === 'object' && 'success' in data;
+  };
+
+  // Type guard to check error action data type
+  const isErrorActionData = (data: any): data is { error: string } => {
+    return data && typeof data === 'object' && 'error' in data;
+  };
+
   const handleScanAll = async () => {
     setIsScanning(true);
     try {
@@ -98,8 +108,16 @@ export default function Index() {
       
       {/* Show success/error message */}
       {showMessage && actionData && (
-        <div className={`p-4 mb-4 rounded ${actionData.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-          {actionData.success ? actionData.message : actionData.error}
+        <div className={`p-4 mb-4 rounded ${
+          isSuccessActionData(actionData) && actionData.success 
+            ? 'bg-green-100 text-green-800' 
+            : 'bg-red-100 text-red-800'
+        }`}>
+          {isSuccessActionData(actionData) 
+            ? actionData.message 
+            : isErrorActionData(actionData) 
+              ? actionData.error 
+              : 'Unknown error'}
           <button 
             className="ml-4 text-sm underline" 
             onClick={() => setShowMessage(false)}
@@ -236,6 +254,7 @@ export default function Index() {
                   <th className="px-4 py-2 border-b">Scan Time</th>
                   <th className="px-4 py-2 border-b">Status</th>
                   <th className="px-4 py-2 border-b">Broken Pages</th>
+                  <th className="px-4 py-2 border-b">Total Pages</th>
                 </tr>
               </thead>
               <tbody>
@@ -274,6 +293,9 @@ export default function Index() {
                             </ul>
                           </details>
                         )}
+                      </td>
+                      <td className="px-4 py-2 border-b">
+                        {result.totalPages || 0}
                       </td>
                     </tr>
                   );

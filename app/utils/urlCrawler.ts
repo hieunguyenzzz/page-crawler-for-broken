@@ -10,6 +10,7 @@ interface BrokenPage {
 interface CrawlResult {
   brokenPages: BrokenPage[];
   error?: string;
+  totalPages?: number;
 }
 
 // Function to normalize URLs for comparison (improved version)
@@ -184,7 +185,8 @@ export async function crawlAndCheckUrls(baseUrl: string): Promise<CrawlResult> {
     console.log(`[urlCrawler] Crawl completed. Found ${brokenPages.length} broken URLs`);
 
     return {
-      brokenPages
+      brokenPages,
+      totalPages: uniqueUrlsToCrawl.length
     };
   } catch (error) {
     console.error('[urlCrawler] Crawling error:', error);

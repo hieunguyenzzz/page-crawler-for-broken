@@ -31,7 +31,8 @@ export async function action({ request }: ActionFunctionArgs) {
           success: true,
           message: result.brokenPages.length > 0 
             ? `Found ${result.brokenPages.length} broken pages` 
-            : 'No broken pages found'
+            : 'No broken pages found',
+          totalPages: result.totalPages || 0
         };
         
         const resultId = saveScanResult(scanResult);

@@ -44,6 +44,7 @@ try {
       timestamp TEXT NOT NULL,
       success INTEGER NOT NULL,
       message TEXT NOT NULL,
+      total_pages INTEGER DEFAULT 0,
       FOREIGN KEY (url_id) REFERENCES registered_urls(id)
     );
 

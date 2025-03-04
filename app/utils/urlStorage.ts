@@ -20,6 +20,7 @@ export interface ScanResult {
   brokenPages: BrokenPage[];
   success: boolean;
   message: string;
+  totalPages?: number;
 }
 
 export function getRegisteredUrls(): RegisteredUrl[] {
@@ -79,7 +80,7 @@ export function removeRegisteredUrl(id: string): boolean {
 
 export function getScanResults(): ScanResult[] {
   const stmt = db.prepare(`
-    SELECT sr.id, sr.url_id as urlId, sr.timestamp, sr.success, sr.message
+    SELECT sr.id, sr.url_id as urlId, sr.timestamp, sr.success, sr.message, sr.total_pages as totalPages
     FROM scan_results sr
     ORDER BY sr.timestamp DESC
     LIMIT 100
@@ -105,7 +106,7 @@ export function getScanResults(): ScanResult[] {
 
 export function getLatestScanResultForUrl(urlId: string): ScanResult | null {
   const stmt = db.prepare(`
-    SELECT sr.id, sr.url_id as urlId, sr.timestamp, sr.success, sr.message
+    SELECT sr.id, sr.url_id as urlId, sr.timestamp, sr.success, sr.message, sr.total_pages as totalPages
     FROM scan_results sr
     WHERE sr.url_id = ?
     ORDER BY sr.timestamp DESC
@@ -138,15 +139,16 @@ export function saveScanResult(result: ScanResult): number {
   const transaction = db.transaction(() => {
     // Insert scan result
     const insertResultStmt = db.prepare(`
-      INSERT INTO scan_results (url_id, timestamp, success, message)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO scan_results (url_id, timestamp, success, message, total_pages)
+      VALUES (?, ?, ?, ?, ?)
     `);
     
     const resultInsert = insertResultStmt.run(
       result.urlId,
       result.timestamp,
       result.success ? 1 : 0,
-      result.message
+      result.message,
+      result.totalPages || 0
     );
     
     const resultId = resultInsert.lastInsertRowid as number;
