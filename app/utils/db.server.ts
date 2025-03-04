@@ -57,7 +57,24 @@ try {
       error TEXT,
       FOREIGN KEY (result_id) REFERENCES scan_results(id)
     );
+
+    -- Migration to add total_pages column if it doesn't exist
+    PRAGMA table_info(scan_results);
   `);
+  
+  // Check if total_pages column exists, if not, add it
+  const columnExists = db.prepare(`
+    SELECT COUNT(*) as count 
+    FROM pragma_table_info('scan_results') 
+    WHERE name = 'total_pages'
+  `).get() as { count: number };
+
+  if (!columnExists.count) {
+    console.log('Adding total_pages column to scan_results table');
+    db.exec(`
+      ALTER TABLE scan_results ADD COLUMN total_pages INTEGER DEFAULT 0;
+    `);
+  }
   
   console.log('Database tables initialized');
 } catch (error) {
